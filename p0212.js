@@ -40,7 +40,7 @@
       };
 
       const CONFIG = {
-        strands: 12,
+        strands: 8,
         pointsPerStrand: 360,
         radius: 1.0,
         step: 0.07,
