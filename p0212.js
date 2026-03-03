@@ -705,7 +705,7 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       ========================= */
       function applyStrokeWidthByScale(scaleMul) {
         const scale = CONFIG.scale * scaleMul;
-        const w = STYLE.strokeWidthBase * (scale / CONFIG.scale);
+        const w = STYLE.strokeWidthBase * Math.sqrt(scale / CONFIG.scale);
         outSvg.style.setProperty("--strokeWidth", String(w));
       }
 
