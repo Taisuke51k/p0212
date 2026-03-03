@@ -642,8 +642,8 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
         LIVE.cur.centerX += (LIVE.tgt.centerX - LIVE.cur.centerX) * TRANS.follow;
         LIVE.cur.shape = LIVE.tgt.shape;
          const base = STYLE.strokeWidth;
-const scaled = base * LIVE.cur.scaleMul;
-const clamped = Math.min(18, scaled); // ← 最大18pxまで
+const scaled = STYLE.strokeWidth * Math.sqrt(LIVE.cur.scaleMul);
+const clamped = Math.min(15, scaled); // ← 最大15pxまで
 outSvg.style.setProperty("--strokeWidth", String(clamped));
          updateShadowFromLive();
 
