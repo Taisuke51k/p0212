@@ -11,7 +11,7 @@
     try {
       // ---- CONFIG ----
       const THEME = { bg: "#ffffff" };
-      const STYLE = { stroke: "#1e1a17", strokeWidth: 12 };
+      const STYLE = { stroke: "#264226", strokeWidth: 6 };
 
       const CONFIG = {
         strands: 12,
