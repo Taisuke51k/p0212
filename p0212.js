@@ -34,7 +34,7 @@
       const THEME = { bg: "#ffffff" };
       const STYLE = {
         stroke: "#264226",
-        strokeWidth: 6,
+        strokeWidth: 3,
         strokeOpacity: 1.0,
         multiply: true,
       };
