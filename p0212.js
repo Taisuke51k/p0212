@@ -662,7 +662,7 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
 
           // 4 states split
           const t1 = 0.25, t2 = 0.50, t3 = 0.75;
-          const w = TRANS.philosophyBlendWidth;
+          const w = STYLE.strokeWidthBase * Math.sqrt(scale / CONFIG.scale);
 
           // morph spec: ①のみ0 / ②③④は1
           LIVE.tgt.morph = p < t1 ? 0.0 : 1.0;
