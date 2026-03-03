@@ -41,7 +41,7 @@
 
       const CONFIG = {
         strands: 8,
-        pointsPerStrand: 360,
+        pointsPerStrand: 220,
         radius: 1.0,
         step: 0.07,
 
@@ -52,10 +52,10 @@
         maxRotX: 40,
         ease: 0.1,
 
-        smoothPasses: 1,
-        smoothStrength: 0.16,
+        smoothPasses: 0.5,
+        smoothStrength: 0.12,
         splineAlpha: 0.5,
-        precision: 5,
+        precision: 3,
 
         minTurnDeg: 0.85,
         turnJitterDeg: 0.35,
