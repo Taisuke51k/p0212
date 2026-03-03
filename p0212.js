@@ -589,39 +589,65 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       const fallbackSections = Array.from(document.querySelectorAll("section"));
       const getSectionEl = (id) => sectionsById.get(id) || null;
 
-      function pickActiveSectionKey() {
-        // まずIDで取れるもの優先
-        const list = sectionIds
-          .map((id) => ({ id, el: getSectionEl(id) }))
-          .filter((x) => x.el);
+      // ====== REPLACE: pickActiveSectionKey + updateSectionTarget ======
+// ※このブロックで、既存の同名関数（2つ）を丸ごと置き換えてください。
 
-        const line = TOP_LINE_PX;
-        let best = null;
-        let bestTop = -Infinity;
+function pickActiveSectionKey() {
+  // id優先で候補を作る（あればそれだけで判定）
+  const list = sectionIds
+    .map((id) => ({ id, el: getSectionEl(id) }))
+    .filter((x) => x.el);
 
-        if (list.length) {
-          for (const item of list) {
-            const r = item.el.getBoundingClientRect();
-            if (r.top <= line && r.top > bestTop) {
-              bestTop = r.top;
-              best = item;
-            }
-          }
-          return best ? best.id : list[0].id;
-        }
+  const line = TOP_LINE_PX;
 
-        // fallback: section配列
-        let bestIdx = -1;
-        bestTop = -Infinity;
-        for (let i = 0; i < fallbackSections.length; i++) {
-          const r = fallbackSections[i].getBoundingClientRect();
-          if (r.top <= line && r.top > bestTop) {
-            bestTop = r.top;
-            bestIdx = i;
-          }
-        }
-        return bestIdx === -1 ? "fv" : `section-${bestIdx}`;
+  // 「lineに一番近い top」を採用（上でも下でもOK）
+  const pickClosest = (arr) => {
+    let best = null;
+    let bestDist = Infinity;
+
+    for (const item of arr) {
+      const r = item.el.getBoundingClientRect();
+      const dist = Math.abs(r.top - line);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = item;
       }
+    }
+    return best;
+  };
+
+  if (list.length) {
+    return pickClosest(list).id;
+  }
+
+  // fallback: <section> 群から同様に探す
+  if (!fallbackSections.length) return "fv";
+
+  let bestIdx = 0;
+  let bestDist = Infinity;
+
+  for (let i = 0; i < fallbackSections.length; i++) {
+    const r = fallbackSections[i].getBoundingClientRect();
+    const dist = Math.abs(r.top - line);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+    }
+  }
+
+  return `section-${bestIdx}`;
+}
+
+// （フリッカー防止用に残す。今は強く使ってないが害はない）
+let __lastKey = "fv";
+
+function updateSectionTarget() {
+  const next = pickActiveSectionKey();
+
+  __lastKey = next; // 今回は素直に切替
+  LIVE.key = __lastKey;
+  LIVE.tgt = targetFromSection(__lastKey);
+}
 
       function getSectionProgress(el) {
         if (!el) return 0;
@@ -724,28 +750,6 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
         curShape: DEFAULTS.shape,
         shapeMix: 1.0, // 0..1 (not used for true blending, only hysteresis)
       };
-
-      function updateSectionTarget() {
-        const key = pickActiveSectionKey();
-        LIVE.key = key;
-
-        // If we are in fallback mode, try to map to ids by visibility anyway:
-        // If sections exist by id, key will be that id. Otherwise key is section-i.
-
-        // If key is fallback but we have known ids, try detect by proximity:
-        let resolved = key;
-        if (key.startsWith("section-")) {
-          // try: if any known id section is currently active, prefer it
-          const known = pickActiveSectionKey();
-          resolved = known;
-        }
-
-        // compute target
-        LIVE.tgt = targetFromSection(resolved);
-
-        // If section isn't found (e.g. ids missing), treat as default
-        if (!LIVE.tgt) LIVE.tgt = { ...DEFAULTS };
-      }
 
       /* =========================
          optional scroll rotation (off by default)
