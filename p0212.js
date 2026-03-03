@@ -123,7 +123,6 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
   stroke-width:var(--strokeWidth);
   stroke-linecap:round;
   stroke-linejoin:round;
-  vector-effect:non-scaling-stroke;
   opacity:var(--strokeOpacity);
   ${STYLE.multiply ? "mix-blend-mode:multiply;" : ""}
 }
@@ -517,46 +516,78 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       applyViewBox();
 
       function rebuildSceneBase() {
-        while (outSvg.firstChild) outSvg.removeChild(outSvg.firstChild);
+  while (outSvg.firstChild) outSvg.removeChild(outSvg.firstChild);
 
-        const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-        outSvg.appendChild(defs);
+  shadowEl = null;
+  shadowBlurEl = null;
 
-        if (SHADOW.enabled) {
-          const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
-          filter.setAttribute("id", "p0212-shadow-filter");
-          filter.setAttribute("x", "-50%");
-          filter.setAttribute("y", "-50%");
-          filter.setAttribute("width", "200%");
-          filter.setAttribute("height", "200%");
-          const blur = document.createElementNS("http://www.w3.org/2000/svg", "feGaussianBlur");
-          blur.setAttribute("in", "SourceGraphic");
-          blur.setAttribute("stdDeviation", String(SHADOW.blurStdDev));
-          filter.appendChild(blur);
-          defs.appendChild(filter);
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  outSvg.appendChild(defs);
 
-          const r = CONFIG.viewRadius;
-          const cx = 0;
-          const cy = (-r) + (r * 2) * SHADOW.yFromTop;
-          const rx = r * SHADOW.rxBase;
-          const ry = r * SHADOW.ryBase;
+  if (SHADOW.enabled) {
+    const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+    filter.setAttribute("id", "p0212-shadow-filter");
+    filter.setAttribute("x", "-50%");
+    filter.setAttribute("y", "-50%");
+    filter.setAttribute("width", "200%");
+    filter.setAttribute("height", "200%");
 
-          const ell = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
-          ell.setAttribute("class", "p0212-shadow");
-          ell.setAttribute("cx", String(cx));
-          ell.setAttribute("cy", String(cy));
-          ell.setAttribute("rx", String(rx));
-          ell.setAttribute("ry", String(ry));
-          ell.setAttribute("filter", "url(#p0212-shadow-filter)");
-          outSvg.appendChild(ell);
-        }
-      }
+    const blur = document.createElementNS("http://www.w3.org/2000/svg", "feGaussianBlur");
+    blur.setAttribute("in", "SourceGraphic");
+    blur.setAttribute("stdDeviation", String(SHADOW.blurStdDev));
+    filter.appendChild(blur);
+    defs.appendChild(filter);
+
+    shadowBlurEl = blur;
+
+    const ell = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+    ell.setAttribute("class", "p0212-shadow");
+    ell.setAttribute("filter", "url(#p0212-shadow-filter)");
+    outSvg.appendChild(ell);
+
+    shadowEl = ell;
+
+    // 初回だけ一旦セット（以降は render() で更新）
+    updateShadowFromLive();
+  }
+}
+       function updateShadowFromLive() {
+  if (!shadowEl) return;
+
+  const r = CONFIG.viewRadius;
+  const vbW = r * 2;
+
+  // “球の下”っぽい基準位置（viewBox内）
+  const baseCx = 0;
+  const baseCy = (-r) + vbW * SHADOW.yFromTop;
+
+  // 追従：左右位置は centerX、サイズは scaleMul
+  const cx = baseCx + LIVE.cur.centerX * vbW;
+  const cy = baseCy;
+
+  const s = Math.max(0.05, LIVE.cur.scaleMul);
+  const rx = r * SHADOW.rxBase * s;
+  const ry = r * SHADOW.ryBase * s;
+
+  shadowEl.setAttribute("cx", String(cx));
+  shadowEl.setAttribute("cy", String(cy));
+  shadowEl.setAttribute("rx", String(rx));
+  shadowEl.setAttribute("ry", String(ry));
+
+  // 影のぼかしもスケールに追従（大きくした時に影が細く見えない）
+  if (shadowBlurEl) {
+    const blur = Math.max(0.5, SHADOW.blurStdDev * s);
+    shadowBlurEl.setAttribute("stdDeviation", String(blur));
+  }
+}
 
       /* =========================
          PATHS
       ========================= */
       let els = [];
       let strands3D = null;
+      let shadowEl = null;
+      let shadowBlurEl = null;
 
       function ensurePaths() {
         rebuildSceneBase();
@@ -610,6 +641,8 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
         LIVE.cur.scaleMul += (LIVE.tgt.scaleMul - LIVE.cur.scaleMul) * TRANS.follow;
         LIVE.cur.centerX += (LIVE.tgt.centerX - LIVE.cur.centerX) * TRANS.follow;
         LIVE.cur.shape = LIVE.tgt.shape;
+         outSvg.style.setProperty("--strokeWidth", String(STYLE.strokeWidth * LIVE.cur.scaleMul));
+         updateShadowFromLive();
 
         MORPH.surfaceMorph = LIVE.cur.morph;
 
