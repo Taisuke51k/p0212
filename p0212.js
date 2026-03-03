@@ -1,61 +1,58 @@
 /* =========================
-   Prototype_0212 (external) + Section-driven transitions (FULL / robust for Studio)
-   - CSS注入 / DOM生成 / 二重マウント防止
-   - “window scroll依存を捨てて” 毎フレーム section判定（Studioの独自スクロールでも動く）
-   - セクション（id）で shape / size / centerX を切替（画面上部トリガー → イージング）
-     fv: default
-     philosophy: sphere → cube → tetra（セクション内進行で順番）
-     topics: yarn（morph=0）
-     profile: size 20%, x -20%
-     works: size 400%, x 0
-     service: size 200%, x -50%
-     contact: size 20%, x +20%
-   - 常時ゆっくり回転（auto rotate）
-   - 下に薄い影（楕円＋ガウスぼかし）
-   - 線は乗算（mix-blend-mode:multiply）
+   Prototype_0212 (external) — FULL REPLACE JS (Section-driven + Smooth shape morph)
+   - Fixed fullscreen SVG background (Studio貼り付け想定)
+   - セクション切替（画面上部）をトリガーに：
+       shape / morph / scale / centerX をイージングで遷移
+   - philosophy はセクション内進行で 4状態：
+       1) sphere, morph 0
+       2) sphere, morph 1
+       3) cube,   morph 1
+       4) tetra,  morph 1
+     さらに shape は sphere→cube / cube→tetra を“滑らか補間”可能
+   - 常時ゆっくり自動回転
+   - 影（楕円＋軽いぼかし）は scale/center に追従
+   - 線は multiply（乗算）
+   - 線幅は表示スケールに比例（vector-effect は使わない）
    ========================= */
+
 (() => {
   const boot = () => {
     try {
-      if (window.__P0212_MOUNTED__) {
-        console.warn("[P0212] already mounted");
-        return;
-      }
-      window.__P0212_MOUNTED__ = true;
-
       /* =========================
          FLAGS
       ========================= */
-      const DEBUG = true; // ← 動いてるか確認したい間だけ true
+      const SHOW_GUI = false; // lil-gui を読み込んでるなら true にしてもOK
+      const TOP_LINE_PX = 0; // 画面上部判定ライン(px)
 
       /* =========================
-         THEME / STYLE / CONFIG
+         BASE THEME / STYLE
       ========================= */
       const THEME = { bg: "#ffffff" };
       const STYLE = {
         stroke: "#264226",
-        strokeWidth: 3,
+        strokeWidthBase: 6, // 基準（CONFIG.scale のときの線幅）
         strokeOpacity: 1.0,
         multiply: true,
       };
 
+      /* =========================
+         CORE CONFIG
+      ========================= */
       const CONFIG = {
-        strands: 8,
-        pointsPerStrand: 220,
+        strands: 12,
+        pointsPerStrand: 360,
         radius: 1.0,
         step: 0.07,
 
         cameraDistance: 3.2,
-        scale: 120,
+        scale: 120, // 基準スケール
 
-        maxRotY: 120,
-        maxRotX: 40,
-        ease: 0.1,
+        ease: 0.10,
 
-        smoothPasses: 0.5,
-        smoothStrength: 0.12,
+        smoothPasses: 1,
+        smoothStrength: 0.16,
         splineAlpha: 0.5,
-        precision: 3,
+        precision: 5,
 
         minTurnDeg: 0.85,
         turnJitterDeg: 0.35,
@@ -67,30 +64,48 @@
         edgePower: 3.0,
 
         softBounce: 0.65,
-        viewRadius: 160,
+
+        viewRadius: 160, // viewBox 半径（表示窓）
       };
 
+      /* =========================
+         ROTATION (auto rotate)
+      ========================= */
       const ROT = {
-        scrollEnabled: false, // ここは今回不要なら false
         autoEnabled: true,
         autoDegPerSecY: 10.0,
         autoDegPerSecX: 2.6,
       };
 
-      const TRANS = { follow: 0.12 };
+      /* =========================
+         TRANSITION TUNING
+      ========================= */
+      const TRANS = {
+        follow: 0.12, // セクション target への追従（0..1 / 大きいほど速い）
+        // philosophy の shape 切替 “境界のなだらか幅”
+        philosophyBlendWidth: 0.06,
+      };
 
-      const MORPH = { surfaceMorph: 0.0 }; // 0=volume, 1=surface
-
+      /* =========================
+         SHADOW (ellipse + blur) 追従
+      ========================= */
       const SHADOW = {
         enabled: true,
         opacity: 0.14,
         blurStdDev: 10,
-        yFromTop: 0.76,
-        rxBase: 0.55,
-        ryBase: 0.13,
+        yOffset: 0.62, // centerY からどれだけ下か（viewBox単位で scale に追従させる）
+        rxRatio: 0.55, // viewRadius に対する比率（さらに scale に追従させる）
+        ryRatio: 0.13,
       };
 
-      const TOP_LINE_PX = 0; // “画面上部で切替”ライン
+      /* =========================
+         DOUBLE MOUNT GUARD
+      ========================= */
+      if (window.__P0212_MOUNTED__) {
+        console.warn("[P0212] already mounted");
+        return;
+      }
+      window.__P0212_MOUNTED__ = true;
 
       /* =========================
          CSS INJECT
@@ -98,13 +113,15 @@
       const css = `
 :root{ --p0212-bg:${THEME.bg}; }
 body{ background:var(--p0212-bg); overflow-x:hidden; }
+
+/* スクロール長確保（必要なら） */
 .p0212-spacer{ height:480vh; }
 
 .p0212-stage{
   position:fixed; inset:0;
   width:100vw; height:100vh;
   overflow:hidden;
-  pointer-events:none;
+  pointer-events:none; /* 背景運用 */
   z-index:0;
 }
 
@@ -113,7 +130,7 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
   width:100vw; height:100vh;
   display:block;
   --stroke:${STYLE.stroke};
-  --strokeWidth:${STYLE.strokeWidth};
+  --strokeWidth:${STYLE.strokeWidthBase};
   --strokeOpacity:${STYLE.strokeOpacity};
 }
 
@@ -125,6 +142,7 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
   stroke-linejoin:round;
   opacity:var(--strokeOpacity);
   ${STYLE.multiply ? "mix-blend-mode:multiply;" : ""}
+  /* vector-effect: non-scaling-stroke;  ← 使わない（線幅をスケールに比例させたい） */
 }
 
 #p0212-out .p0212-shadow{
@@ -139,7 +157,7 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       document.head.appendChild(styleEl);
 
       /* =========================
-         DOM MOUNT
+         DOM MOUNT (external)
       ========================= */
       function ensureDOM() {
         let spacer = document.querySelector(".p0212-spacer");
@@ -165,16 +183,21 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
           stage.appendChild(svg);
         }
 
-        return svg;
+        return { svg, spacer };
       }
 
-      const outSvg = ensureDOM();
+      const { svg: outSvg, spacer: spacerEl } = ensureDOM();
 
       /* =========================
-         UTILS
+         HELPERS
       ========================= */
       const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
       const lerp = (a, b, t) => a + (b - a) * t;
+      const invLerp = (a, b, v) => (b === a ? 0 : (v - a) / (b - a));
+      const smoothstep = (t) => {
+        t = clamp(t, 0, 1);
+        return t * t * (3 - 2 * t);
+      };
 
       function mulberry32(seed) {
         let t = seed >>> 0;
@@ -212,11 +235,11 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       function add(a, b) {
         return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
       }
-      function mul(a, s) {
-        return { x: a.x * s, y: a.y * s, z: a.z * s };
-      }
       function sub(a, b) {
         return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
+      }
+      function mul(a, s) {
+        return { x: a.x * s, y: a.y * s, z: a.z * s };
       }
       function cross(a, b) {
         return {
@@ -326,7 +349,7 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       }
 
       /* =========================
-         YARN GEN
+         YARN GENERATOR
       ========================= */
       function makeYarnStrands(cfg, seed) {
         const rng = mulberry32(seed);
@@ -374,7 +397,11 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
             const pull = cfg.centerPull + cfg.edgeInBias * edge;
             dir = norm(add(mul(dir, 1 - pull), mul(toCenter, pull)));
 
-            p = { x: p.x + dir.x * cfg.step, y: p.y + dir.y * cfg.step, z: p.z + dir.z * cfg.step };
+            p = {
+              x: p.x + dir.x * cfg.step,
+              y: p.y + dir.y * cfg.step,
+              z: p.z + dir.z * cfg.step,
+            };
 
             const rr = Math.hypot(p.x, p.y, p.z);
             if (rr > cfg.radius) {
@@ -382,7 +409,11 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
               p = { x: n.x * cfg.radius, y: n.y * cfg.radius, z: n.z * cfg.radius };
 
               const dn = dir.x * n.x + dir.y * n.y + dir.z * n.z;
-              const reflected = { x: dir.x - 2 * dn * n.x, y: dir.y - 2 * dn * n.y, z: dir.z - 2 * dn * n.z };
+              const reflected = {
+                x: dir.x - 2 * dn * n.x,
+                y: dir.y - 2 * dn * n.y,
+                z: dir.z - 2 * dn * n.z,
+              };
 
               dir = norm({
                 x: dir.x * (1 - cfg.softBounce) + reflected.x * cfg.softBounce,
@@ -393,37 +424,67 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
 
             pts.push({ x: p.x, y: p.y, z: p.z });
           }
+
           strands.push(pts);
         }
         return strands;
       }
 
       /* =========================
-         SURFACE MAPS
+         SHAPE SURFACE MAP
+         - sphere / cube / tetra
       ========================= */
       function surfaceSphere(v) {
         const r = Math.hypot(v.x, v.y, v.z) || 1e-9;
-        return { x: (v.x / r) * CONFIG.radius, y: (v.y / r) * CONFIG.radius, z: (v.z / r) * CONFIG.radius };
+        const nx = v.x / r,
+          ny = v.y / r,
+          nz = v.z / r;
+        return { x: nx * CONFIG.radius, y: ny * CONFIG.radius, z: nz * CONFIG.radius };
       }
+
       function surfaceCube(v) {
-        const ax = Math.abs(v.x), ay = Math.abs(v.y), az = Math.abs(v.z);
+        const ax = Math.abs(v.x),
+          ay = Math.abs(v.y),
+          az = Math.abs(v.z);
         const m = Math.max(ax, ay, az) || 1e-9;
         const s = CONFIG.radius / m;
         return { x: v.x * s, y: v.y * s, z: v.z * s };
       }
+
+      // tetra: 4つの平面でクリップ（安定＆軽い）
+      // 正四面体の半空間: n_i · x <= d を満たす最遠点を求める近似
+      // 実用上は「方向vに対して、最も制約の厳しい面でスケール」する
+      const TETRA = (() => {
+        const dirs = [
+          norm({ x: 1, y: 1, z: 1 }),
+          norm({ x: 1, y: -1, z: -1 }),
+          norm({ x: -1, y: 1, z: -1 }),
+          norm({ x: -1, y: -1, z: 1 }),
+        ];
+        // 面法線は頂点方向の反対
+        const normals = dirs.map((d) => ({ x: -d.x, y: -d.y, z: -d.z }));
+        // 正四面体（外接球半径R）の面までの距離は R/3（原点→面）
+        const d = CONFIG.radius / 3;
+        return { normals, d };
+      })();
+
       function surfaceTetra(v) {
-        const d0 = norm({ x: 1, y: 1, z: 1 });
-        const d1 = norm({ x: 1, y: -1, z: -1 });
-        const d2 = norm({ x: -1, y: 1, z: -1 });
-        const d3 = norm({ x: -1, y: -1, z: 1 });
-        const n = norm(v);
-        const ds = [dot(n, d0), dot(n, d1), dot(n, d2), dot(n, d3)];
-        let idx = 0;
-        for (let i = 1; i < 4; i++) if (ds[i] > ds[idx]) idx = i;
-        const faceN = [d0, d1, d2, d3][idx];
-        const pushed = norm(add(mul(n, 0.55), mul(faceN, 0.45)));
-        return { x: pushed.x * CONFIG.radius, y: pushed.y * CONFIG.radius, z: pushed.z * CONFIG.radius };
+        const vv = norm(v);
+        // vv をそのまま伸ばして、どの面制約で止まるか計算
+        // n·(s*vv) <= d  → s <= d / (n·vv)
+        let sMax = Infinity;
+        for (const n of TETRA.normals) {
+          const nv = n.x * vv.x + n.y * vv.y + n.z * vv.z;
+          // nv が正（外向き）だと制約になる
+          if (nv > 1e-9) {
+            sMax = Math.min(sMax, TETRA.d / nv);
+          }
+        }
+        // safety
+        if (!isFinite(sMax)) sMax = CONFIG.radius;
+        return { x: vv.x * sMax, y: vv.y * sMax, z: vv.z * sMax };
       }
+
       function getSurfacePoint(shape, v) {
         if (shape === "cube") return surfaceCube(v);
         if (shape === "tetra") return surfaceTetra(v);
@@ -431,99 +492,7 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       }
 
       /* =========================
-         SECTION LOGIC (id-based)
-      ========================= */
-      const SECTION_LOOK = {
-        fv:        { shape: "sphere", morph: 0.0, scaleMul: 1.0, centerX: 0.0 },
-        philosophy:{ shape: "sphere", morph: 1.0, scaleMul: 1.0, centerX: 0.0 },
-        topics:    { shape: "sphere", morph: 0.0, scaleMul: 1.0, centerX: 0.0 },
-        profile:   { shape: "sphere", morph: 0.0, scaleMul: 0.2, centerX: -0.2 },
-        works:     { shape: "sphere", morph: 0.0, scaleMul: 4.0, centerX: 0.0 },
-        service:   { shape: "sphere", morph: 0.0, scaleMul: 2.0, centerX: -0.5 },
-        contact:   { shape: "sphere", morph: 0.0, scaleMul: 0.2, centerX: +0.2 },
-      };
-      const SECTION_KEYS = Object.keys(SECTION_LOOK);
-
-      function getSectionEl(id) {
-        // idがsection直下じゃなくても「そのidの要素」を拾う（Studio対策）
-        return document.getElementById(id);
-      }
-
-      function pickActiveSectionKey() {
-        const line = TOP_LINE_PX;
-        let bestKey = "fv";
-        let bestTop = -Infinity;
-
-        for (const k of SECTION_KEYS) {
-          const el = getSectionEl(k);
-          if (!el) continue;
-          const r = el.getBoundingClientRect();
-          if (r.top <= line && r.top > bestTop) {
-            bestTop = r.top;
-            bestKey = k;
-          }
-        }
-        return bestKey;
-      }
-
-      function getSectionProgressById(id) {
-        const el = getSectionEl(id);
-        if (!el) return 0;
-        const r = el.getBoundingClientRect();
-        const h = Math.max(1, r.height - innerHeight);
-        return clamp((-r.top + TOP_LINE_PX) / h, 0, 1);
-      }
-
-      const LIVE = {
-        key: "fv",
-        prevKey: "fv",
-        tgt: { shape: "sphere", morph: 0, scaleMul: 1, centerX: 0 },
-        cur: { shape: "sphere", morph: 0, scaleMul: 1, centerX: 0 },
-      };
-
-      function updateSectionTarget() {
-        const key = pickActiveSectionKey();
-        LIVE.key = key;
-
-        const base = SECTION_LOOK[key] || SECTION_LOOK.fv;
-        LIVE.tgt.shape = base.shape;
-        LIVE.tgt.morph = base.morph;
-        LIVE.tgt.scaleMul = base.scaleMul;
-        LIVE.tgt.centerX = base.centerX;
-
-        if (key === "philosophy") {
-  const p = getSectionProgressById("philosophy");
-
-  if (p < 0.25) {
-    // ① sphere / morph 0
-    LIVE.tgt.shape = "sphere";
-    LIVE.tgt.morph = 0.0;
-  }
-  else if (p < 0.5) {
-    // ② sphere / morph 1
-    LIVE.tgt.shape = "sphere";
-    LIVE.tgt.morph = 1.0;
-  }
-  else if (p < 0.75) {
-    // ③ cube / morph 1
-    LIVE.tgt.shape = "cube";
-    LIVE.tgt.morph = 1.0;
-  }
-  else {
-    // ④ tetra / morph 1
-    LIVE.tgt.shape = "tetra";
-    LIVE.tgt.morph = 1.0;
-  }
-}
-
-        if (DEBUG && LIVE.prevKey !== LIVE.key) {
-          console.log("[P0212] active:", LIVE.key);
-          LIVE.prevKey = LIVE.key;
-        }
-      }
-
-      /* =========================
-         VIEWBOX + DEFS + SHADOW
+         VIEWBOX
       ========================= */
       function applyViewBox() {
         const r = CONFIG.viewRadius;
@@ -532,91 +501,65 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       }
       applyViewBox();
 
-      function rebuildSceneBase() {
-  while (outSvg.firstChild) outSvg.removeChild(outSvg.firstChild);
-
-  shadowEl = null;
-  shadowBlurEl = null;
-
-  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-  outSvg.appendChild(defs);
-
-  if (SHADOW.enabled) {
-    const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
-    filter.setAttribute("id", "p0212-shadow-filter");
-    filter.setAttribute("x", "-50%");
-    filter.setAttribute("y", "-50%");
-    filter.setAttribute("width", "200%");
-    filter.setAttribute("height", "200%");
-
-    const blur = document.createElementNS("http://www.w3.org/2000/svg", "feGaussianBlur");
-    blur.setAttribute("in", "SourceGraphic");
-    blur.setAttribute("stdDeviation", String(SHADOW.blurStdDev));
-    filter.appendChild(blur);
-    defs.appendChild(filter);
-
-    shadowBlurEl = blur;
-
-    const ell = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
-    ell.setAttribute("class", "p0212-shadow");
-    ell.setAttribute("filter", "url(#p0212-shadow-filter)");
-    outSvg.appendChild(ell);
-
-    shadowEl = ell;
-
-    // 初回だけ一旦セット（以降は render() で更新）
-    updateShadowFromLive();
-  }
-}
-       function updateShadowFromLive() {
-  if (!shadowEl) return;
-
-  const r = CONFIG.viewRadius;
-  const vbW = r * 2;
-
-  // “球の下”っぽい基準位置（viewBox内）
-  const baseCx = 0;
-  const baseCy = (-r) + vbW * SHADOW.yFromTop;
-
-  // 追従：左右位置は centerX、サイズは scaleMul
-  const cx = baseCx + LIVE.cur.centerX * vbW;
-  const cy = baseCy;
-
-  const s = Math.max(0.05, LIVE.cur.scaleMul);
-  const rx = r * SHADOW.rxBase * s;
-  const ry = r * SHADOW.ryBase * s;
-
-  shadowEl.setAttribute("cx", String(cx));
-  shadowEl.setAttribute("cy", String(cy));
-  shadowEl.setAttribute("rx", String(rx));
-  shadowEl.setAttribute("ry", String(ry));
-
-  // 影のぼかしもスケールに追従（大きくした時に影が細く見えない）
-  if (shadowBlurEl) {
-    const blur = Math.max(0.5, SHADOW.blurStdDev * s);
-    shadowBlurEl.setAttribute("stdDeviation", String(blur));
-  }
-}
-
       /* =========================
-         PATHS
+         SVG CONTENT (shadow + strands)
       ========================= */
-      let els = [];
-      let strands3D = null;
+      let defsEl = null;
       let shadowEl = null;
-      let shadowBlurEl = null;
+      let pathsGroup = null;
 
+      function ensureSVGStructure() {
+        while (outSvg.firstChild) outSvg.removeChild(outSvg.firstChild);
+
+        // defs
+        defsEl = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+        outSvg.appendChild(defsEl);
+
+        // shadow filter
+        if (SHADOW.enabled) {
+          const f = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+          f.setAttribute("id", "p0212-shadow-filter");
+          f.setAttribute("x", "-50%");
+          f.setAttribute("y", "-50%");
+          f.setAttribute("width", "200%");
+          f.setAttribute("height", "200%");
+          const blur = document.createElementNS("http://www.w3.org/2000/svg", "feGaussianBlur");
+          blur.setAttribute("in", "SourceGraphic");
+          blur.setAttribute("stdDeviation", String(SHADOW.blurStdDev));
+          f.appendChild(blur);
+          defsEl.appendChild(f);
+
+          shadowEl = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+          shadowEl.setAttribute("class", "p0212-shadow");
+          shadowEl.setAttribute("filter", "url(#p0212-shadow-filter)");
+          outSvg.appendChild(shadowEl);
+        } else {
+          shadowEl = null;
+        }
+
+        // group for paths
+        pathsGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        pathsGroup.setAttribute("id", "p0212-paths");
+        outSvg.appendChild(pathsGroup);
+      }
+
+      ensureSVGStructure();
+
+      // paths
+      let els = [];
       function ensurePaths() {
-        rebuildSceneBase();
+        while (pathsGroup.firstChild) pathsGroup.removeChild(pathsGroup.firstChild);
         els = [];
         for (let i = 0; i < CONFIG.strands; i++) {
           const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
           p.setAttribute("class", "strand");
-          outSvg.appendChild(p);
+          pathsGroup.appendChild(p);
           els.push(p);
         }
       }
 
+      // generate
+      let strands3D = null;
       function regenerateNow() {
         ensurePaths();
         strands3D = makeYarnStrands(CONFIG, (Date.now() & 0xffffffff) >>> 0);
@@ -625,95 +568,272 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       regenerateNow();
 
       /* =========================
-         OPTIONAL scroll-rotate (kept)
+         SECTION HANDLING
+         - ids: fv, philosophy, topics, profile, works, service, contact
       ========================= */
-      let curRx = 0, curRy = 0, tgtRx = 0, tgtRy = 0;
+      const KEYS = ["fv", "philosophy", "topics", "profile", "works", "service", "contact"];
 
-      function updateScrollRotateTarget() {
-        if (!ROT.scrollEnabled) { tgtRx = 0; tgtRy = 0; return; }
-        const doc = document.documentElement;
-        const maxScroll = Math.max(1, doc.scrollHeight - innerHeight);
-        const t = clamp(window.scrollY / maxScroll, 0, 1);
-        const u = (t - 0.5) * 2;
-        tgtRy = (u * CONFIG.maxRotY * Math.PI) / 180;
-        tgtRx = (-u * CONFIG.maxRotX * Math.PI) / 180;
+      // 位置は「画面中心を 0」として viewBox 単位で扱う（-viewRadius .. +viewRadius）
+      // centerX = -0.6*viewRadius なら左寄り / +0.6*viewRadius なら右寄り
+      function xFromLeftRatio(r) {
+        // r=0.2 => 左から20% → 中心基準に変換（-1..+1 くらい）
+        // centerX = (r - 0.5) * 2 * viewRadius
+        return (r - 0.5) * 2 * CONFIG.viewRadius;
+      }
+
+      const SECTION_PRESETS = {
+        fv:       { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 1.0, centerX: 0.0, centerY: 0.0 },
+        philosophy:{ morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 1.0, centerX: 0.0, centerY: 0.0 }, // 中で上書き
+        topics:   { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 1.0, centerX: 0.0, centerY: 0.0 },
+        profile:  { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 0.2, centerX: xFromLeftRatio(0.2), centerY: 0.0 },
+        works:    { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 4.0, centerX: 0.0, centerY: 0.0 },
+        service:  { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 2.0, centerX: xFromLeftRatio(0.0), centerY: 0.0 },
+        contact:  { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 0.2, centerX: xFromLeftRatio(0.8), centerY: 0.0 },
+      };
+
+      function getById(id) {
+        return document.getElementById(id);
+      }
+
+      function getSectionProgressById(id) {
+        const el = getById(id);
+        if (!el) return 0;
+        const r = el.getBoundingClientRect();
+        const h = Math.max(1, r.height - innerHeight);
+        return clamp((-r.top + TOP_LINE_PX) / h, 0, 1);
+      }
+
+      // 「画面上部を越えた中で一番近い」= active
+      function pickActiveSectionKey() {
+        let bestKey = "fv";
+        let bestTop = -Infinity;
+
+        for (const key of KEYS) {
+          const el = getById(key);
+          if (!el) continue;
+          const r = el.getBoundingClientRect();
+          if (r.top <= TOP_LINE_PX && r.top > bestTop) {
+            bestTop = r.top;
+            bestKey = key;
+          }
+        }
+        return bestKey;
       }
 
       /* =========================
-         AUTO ROTATION + RENDER
+         LIVE STATE
       ========================= */
+      const LIVE = {
+        activeKey: "fv",
+
+        tgt: {
+          morph: 0.0,
+          shapeBlend: { a: "sphere", b: "sphere", t: 0.0 },
+          scaleMul: 1.0,
+          centerX: 0.0,
+          centerY: 0.0,
+        },
+        cur: {
+          morph: 0.0,
+          // shapeBlend は tgt 側をそのまま参照してOK（tで滑らか化済み）
+          scaleMul: 1.0,
+          centerX: 0.0,
+          centerY: 0.0,
+        },
+      };
+
+      function updateSectionTarget() {
+        const key = pickActiveSectionKey();
+        LIVE.activeKey = key;
+
+        // base preset
+        const base = SECTION_PRESETS[key] || SECTION_PRESETS.fv;
+
+        // write
+        LIVE.tgt.morph = base.morph;
+        LIVE.tgt.shapeBlend = { a: base.shapeA, b: base.shapeB, t: base.t };
+        LIVE.tgt.scaleMul = base.scaleMul;
+        LIVE.tgt.centerX = base.centerX;
+        LIVE.tgt.centerY = base.centerY;
+
+        // philosophy special (4状態＋shape滑らか)
+        if (key === "philosophy") {
+          const p = getSectionProgressById("philosophy");
+
+          // 4 states split
+          const t1 = 0.25, t2 = 0.50, t3 = 0.75;
+          const w = TRANS.philosophyBlendWidth;
+
+          // morph spec: ①のみ0 / ②③④は1
+          LIVE.tgt.morph = p < t1 ? 0.0 : 1.0;
+
+          // shape spec: ①② sphere / ③ cube / ④ tetra
+          // ただし境界(t2, t3)は滑らか補間
+          let a = "sphere", b = "sphere", tt = 0.0;
+
+          // sphere->cube around t2
+          if (p < t2 - w) {
+            a = "sphere"; b = "sphere"; tt = 0.0;
+          } else if (p < t2 + w) {
+            a = "sphere"; b = "cube";
+            tt = smoothstep((p - (t2 - w)) / (2 * w));
+          }
+          // cube->tetra around t3
+          else if (p < t3 - w) {
+            a = "cube"; b = "cube"; tt = 0.0;
+          } else if (p < t3 + w) {
+            a = "cube"; b = "tetra";
+            tt = smoothstep((p - (t3 - w)) / (2 * w));
+          } else {
+            a = "tetra"; b = "tetra"; tt = 0.0;
+          }
+
+          LIVE.tgt.shapeBlend = { a, b, t: tt };
+        }
+      }
+
+      addEventListener("scroll", updateSectionTarget, { passive: true });
+      addEventListener("resize", () => {
+        applyViewBox();
+        updateSectionTarget();
+      });
+      updateSectionTarget();
+
+      /* =========================
+         STROKE WIDTH FOLLOW SCALE
+         - 表示スケールに比例させる
+      ========================= */
+      function applyStrokeWidthByScale(scaleMul) {
+        const scale = CONFIG.scale * scaleMul;
+        const w = STYLE.strokeWidthBase * (scale / CONFIG.scale);
+        outSvg.style.setProperty("--strokeWidth", String(w));
+      }
+
+      // theme / stroke
+      document.documentElement.style.setProperty("--p0212-bg", THEME.bg);
+      outSvg.style.setProperty("--stroke", STYLE.stroke);
+      outSvg.style.setProperty("--strokeOpacity", String(STYLE.strokeOpacity));
+
+      /* =========================
+         RENDER LOOP
+      ========================= */
+      let curRx = 0, curRy = 0;
       let autoRx = 0, autoRy = 0;
       let lastNow = performance.now();
+
+      function updateShadow(scaleMul, cx, cy) {
+        if (!shadowEl || !SHADOW.enabled) return;
+
+        // 影は viewBox 単位で持つ（scale/centerに追従）
+        const r = CONFIG.viewRadius;
+        const s = scaleMul;
+
+        const rx = r * SHADOW.rxRatio * s;
+        const ry = r * SHADOW.ryRatio * s;
+
+        const x = cx;
+        const y = cy + r * SHADOW.yOffset * s;
+
+        shadowEl.setAttribute("cx", x.toFixed(3));
+        shadowEl.setAttribute("cy", y.toFixed(3));
+        shadowEl.setAttribute("rx", rx.toFixed(3));
+        shadowEl.setAttribute("ry", ry.toFixed(3));
+      }
 
       function render(now) {
         const dt = Math.min(0.05, Math.max(0, (now - lastNow) / 1000));
         lastNow = now;
 
-        // ★重要：毎フレーム判定（Studioスクロールでも確実に更新される）
-        updateSectionTarget();
-        updateScrollRotateTarget();
+        // target update (scroll handlerはあるが安全に毎フレ呼んでもOK)
+        // updateSectionTarget();
 
-        // smooth follow
-        LIVE.cur.morph += (LIVE.tgt.morph - LIVE.cur.morph) * TRANS.follow;
-        LIVE.cur.scaleMul += (LIVE.tgt.scaleMul - LIVE.cur.scaleMul) * TRANS.follow;
-        LIVE.cur.centerX += (LIVE.tgt.centerX - LIVE.cur.centerX) * TRANS.follow;
-        LIVE.cur.shape = LIVE.tgt.shape;
-         const base = STYLE.strokeWidth;
-const scaled = STYLE.strokeWidth * Math.sqrt(LIVE.cur.scaleMul);
-const clamped = Math.min(15, scaled); // ← 最大15pxまで
-outSvg.style.setProperty("--strokeWidth", String(clamped));
-         updateShadowFromLive();
+        // smooth follow (section transition easing)
+        const f = TRANS.follow;
 
-        MORPH.surfaceMorph = LIVE.cur.morph;
+        LIVE.cur.morph += (LIVE.tgt.morph - LIVE.cur.morph) * f;
+        LIVE.cur.scaleMul += (LIVE.tgt.scaleMul - LIVE.cur.scaleMul) * f;
+        LIVE.cur.centerX += (LIVE.tgt.centerX - LIVE.cur.centerX) * f;
+        LIVE.cur.centerY += (LIVE.tgt.centerY - LIVE.cur.centerY) * f;
 
-        // rotation
-        curRx += (tgtRx - curRx) * CONFIG.ease;
-        curRy += (tgtRy - curRy) * CONFIG.ease;
+        // stroke width follow scale
+        applyStrokeWidthByScale(LIVE.cur.scaleMul);
 
+        // shadow follow
+        updateShadow(LIVE.cur.scaleMul, LIVE.cur.centerX, LIVE.cur.centerY);
+
+        // auto rotate
         if (ROT.autoEnabled) {
           autoRy += ((ROT.autoDegPerSecY * Math.PI) / 180) * dt;
           autoRx += ((ROT.autoDegPerSecX * Math.PI) / 180) * dt;
         }
 
+        // gentle easing on base rotation (kept as is)
+        curRx += (0 - curRx) * CONFIG.ease;
+        curRy += (0 - curRy) * CONFIG.ease;
+
         const rx = curRx + autoRx;
         const ry = curRy + autoRy;
 
-        const morph = MORPH.surfaceMorph;
+        const morph = LIVE.cur.morph;
+
+        const sb = LIVE.tgt.shapeBlend || { a: "sphere", b: "sphere", t: 0.0 };
+        const scale = CONFIG.scale * LIVE.cur.scaleMul;
+        const cx = LIVE.cur.centerX;
+        const cy = LIVE.cur.centerY;
 
         if (strands3D) {
           const projected = strands3D.map((pts3, i) => {
             let zsum = 0;
 
             const pts2 = pts3.map((v0) => {
-              const srf = getSurfacePoint(LIVE.cur.shape, v0);
+              // surface A / B
+              const sA = getSurfacePoint(sb.a, v0);
+              const sB = getSurfacePoint(sb.b, v0);
 
+              // smooth shape crossfade
+              const srf = {
+                x: lerp(sA.x, sB.x, sb.t),
+                y: lerp(sA.y, sB.y, sb.t),
+                z: lerp(sA.z, sB.z, sb.t),
+              };
+
+              // volume -> surface morph
               const vx = lerp(v0.x, srf.x, morph);
               const vy = lerp(v0.y, srf.y, morph);
               const vz = lerp(v0.z, srf.z, morph);
-              const v = { x: vx, y: vy, z: vz };
 
+              const v = { x: vx, y: vy, z: vz };
               const rr = rotateXY(v, rx, ry);
               const pp = project(rr, CONFIG.cameraDistance);
               zsum += pp.z;
 
-              const vbW = CONFIG.viewRadius * 2;
-              const offsetX = LIVE.cur.centerX * vbW;
-              const scaleFinal = CONFIG.scale * LIVE.cur.scaleMul;
-
-              return { x: pp.x * scaleFinal + offsetX, y: pp.y * scaleFinal };
+              return {
+                x: pp.x * scale + cx,
+                y: pp.y * scale + cy,
+              };
             });
 
-            const smooth2 = smoothPoints2D(pts2, CONFIG.smoothStrength, CONFIG.smoothPasses);
-            const d = pointsToSmoothBezierPath(smooth2, CONFIG.splineAlpha, CONFIG.precision);
+            const smooth2 = smoothPoints2D(
+              pts2,
+              CONFIG.smoothStrength,
+              CONFIG.smoothPasses,
+            );
+
+            const d = pointsToSmoothBezierPath(
+              smooth2,
+              CONFIG.splineAlpha,
+              CONFIG.precision,
+            );
 
             return { i, zavg: zsum / pts3.length, d };
           });
 
+          // 奥→手前
           projected.sort((a, b) => a.zavg - b.zavg);
           for (const it of projected) {
             const el = els[it.i];
             if (el) el.setAttribute("d", it.d);
-            outSvg.appendChild(el);
+            pathsGroup.appendChild(el);
           }
         }
 
@@ -722,15 +842,16 @@ outSvg.style.setProperty("--strokeWidth", String(clamped));
 
       requestAnimationFrame(render);
 
-      addEventListener("resize", () => {
-        applyViewBox();
-        regenerateNow();
-      });
+      /* =========================
+         (optional) click regenerate
+         - 背景運用だと pointer-events:none なので
+           クリック再生成が欲しいなら .p0212-stage を pointer-events:auto にして
+           ここも有効化してね
+      ========================= */
+      // outSvg.style.cursor = "pointer";
+      // outSvg.addEventListener("click", regenerateNow);
 
-      console.log("[P0212] started (robust section follow)");
-      if (DEBUG) {
-        console.log("[P0212] debug: looking for ids:", SECTION_KEYS.join(", "));
-      }
+      console.log("[P0212] started (section-driven + smooth shape blend)");
     } catch (e) {
       console.error("[P0212] crashed:", e);
     }
