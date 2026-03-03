@@ -641,7 +641,10 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
         LIVE.cur.scaleMul += (LIVE.tgt.scaleMul - LIVE.cur.scaleMul) * TRANS.follow;
         LIVE.cur.centerX += (LIVE.tgt.centerX - LIVE.cur.centerX) * TRANS.follow;
         LIVE.cur.shape = LIVE.tgt.shape;
-         outSvg.style.setProperty("--strokeWidth", String(STYLE.strokeWidth * LIVE.cur.scaleMul));
+         const base = STYLE.strokeWidth;
+const scaled = base * LIVE.cur.scaleMul;
+const clamped = Math.min(18, scaled); // ← 最大18pxまで
+outSvg.style.setProperty("--strokeWidth", String(clamped));
          updateShadowFromLive();
 
         MORPH.surfaceMorph = LIVE.cur.morph;
