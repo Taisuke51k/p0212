@@ -30,7 +30,7 @@
       const THEME = { bg: "#ffffff" };
       const STYLE = {
         stroke: "#264226",
-        strokeWidthBase: 4, // 基準（CONFIG.scale のときの線幅）
+        strokeWidthBase: 6, // 基準（CONFIG.scale のときの線幅）
         strokeOpacity: 1.0,
         multiply: true,
       };
@@ -39,7 +39,7 @@
          CORE CONFIG
       ========================= */
       const CONFIG = {
-        strands: 10,
+        strands: 12,
         pointsPerStrand: 360,
         radius: 1.0,
         step: 0.07,
@@ -662,7 +662,7 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
 
           // 4 states split
           const t1 = 0.25, t2 = 0.50, t3 = 0.75;
-          const w = STYLE.strokeWidthBase * Math.sqrt(scale / CONFIG.scale);
+          const w = TRANS.philosophyBlendWidth;
 
           // morph spec: ①のみ0 / ②③④は1
           LIVE.tgt.morph = p < t1 ? 0.0 : 1.0;
@@ -705,7 +705,7 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       ========================= */
       function applyStrokeWidthByScale(scaleMul) {
         const scale = CONFIG.scale * scaleMul;
-        const w = STYLE.strokeWidthBase * Math.sqrt(scale / CONFIG.scale);
+        const w = STYLE.strokeWidthBase * (scale / CONFIG.scale);
         outSvg.style.setProperty("--strokeWidth", String(w));
       }
 
