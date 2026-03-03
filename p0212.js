@@ -30,7 +30,7 @@
       const THEME = { bg: "#ffffff" };
       const STYLE = {
         stroke: "#264226",
-        strokeWidthBase: 6, // 基準（CONFIG.scale のときの線幅）
+        strokeWidthBase: 4, // 基準（CONFIG.scale のときの線幅）
         strokeOpacity: 1.0,
         multiply: true,
       };
@@ -39,7 +39,7 @@
          CORE CONFIG
       ========================= */
       const CONFIG = {
-        strands: 12,
+        strands: 10,
         pointsPerStrand: 360,
         radius: 1.0,
         step: 0.07,
