@@ -492,12 +492,29 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
         LIVE.tgt.centerX = base.centerX;
 
         if (key === "philosophy") {
-          const p = getSectionProgressById("philosophy");
-          if (p < 1 / 3) LIVE.tgt.shape = "sphere";
-          else if (p < 2 / 3) LIVE.tgt.shape = "cube";
-          else LIVE.tgt.shape = "tetra";
-          LIVE.tgt.morph = 1.0;
-        }
+  const p = getSectionProgressById("philosophy");
+
+  if (p < 0.25) {
+    // ① sphere / morph 0
+    LIVE.tgt.shape = "sphere";
+    LIVE.tgt.morph = 0.0;
+  }
+  else if (p < 0.5) {
+    // ② sphere / morph 1
+    LIVE.tgt.shape = "sphere";
+    LIVE.tgt.morph = 1.0;
+  }
+  else if (p < 0.75) {
+    // ③ cube / morph 1
+    LIVE.tgt.shape = "cube";
+    LIVE.tgt.morph = 1.0;
+  }
+  else {
+    // ④ tetra / morph 1
+    LIVE.tgt.shape = "tetra";
+    LIVE.tgt.morph = 1.0;
+  }
+}
 
         if (DEBUG && LIVE.prevKey !== LIVE.key) {
           console.log("[P0212] active:", LIVE.key);
