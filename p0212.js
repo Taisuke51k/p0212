@@ -22,7 +22,7 @@
          FLAGS
       ========================= */
       const SHOW_GUI = false; // lil-gui を読み込んでるなら true にしてもOK
-      const TOP_LINE_PX = 0; // 画面上部判定ライン(px)
+      const SECTION_TRIGGER_RATIO = 0.5;　// 0〜1（0=画面上端, 0.5=中央, 1=画面下端）
 
       /* =========================
          BASE THEME / STYLE
@@ -605,19 +605,18 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
 
       // 「画面上部を越えた中で一番近い」= active
       function pickActiveSectionKey() {
-        let bestKey = "fv";
-        let bestTop = -Infinity;
-
-        for (const key of KEYS) {
-          const el = getById(key);
-          if (!el) continue;
-          const r = el.getBoundingClientRect();
-          if (r.top <= TOP_LINE_PX && r.top > bestTop) {
-            bestTop = r.top;
-            bestKey = key;
-          }
-        }
-        return bestKey;
+         const triggerY = innerHeight * SECTION_TRIGGER_RATIO;
+         let active = "fv";
+         for (const key of KEYS) {
+            const el = getById(key);
+            if (!el) continue;
+            const r = el.getBoundingClientRect();
+            // 「次セクションの上端が triggerY を超えたら」切替
+            if (r.top <= triggerY) {
+               active = key;
+            }
+         }
+         return active;
       }
 
       /* =========================
