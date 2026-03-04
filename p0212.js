@@ -596,14 +596,18 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       }
 
       function getSectionProgressById(id) {
-        const el = getById(id);
-        if (!el) return 0;
-        const r = el.getBoundingClientRect();
-        const h = Math.max(1, r.height - innerHeight);
-        return clamp((-r.top + TOP_LINE_PX) / h, 0, 1);
+         const el = document.getElementById(id);
+         if (!el) return 0;
+         const r = el.getBoundingClientRect();
+         // ★ セクション切替と同じ基準線
+         const triggerY = innerHeight * SECTION_TRIGGER_RATIO;
+         // progress:
+         // 0 = セクション上端が triggerY に来た瞬間
+         // 1 = セクション下端が triggerY に来た瞬間
+         const p = (triggerY - r.top) / Math.max(1, r.height);
+         return clamp(p, 0, 1);
       }
 
-      // 「画面上部を越えた中で一番近い」= active
       function pickActiveSectionKey() {
          const triggerY = innerHeight * SECTION_TRIGGER_RATIO;
          let active = "fv";
