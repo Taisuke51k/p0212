@@ -30,7 +30,7 @@
       const THEME = { bg: "#ffffff" };
       const STYLE = {
         stroke: "#264226",
-        strokeWidthBase: 4, // 基準（CONFIG.scale のときの線幅）
+        strokeWidthBase: 2, // 基準（CONFIG.scale のときの線幅）
         strokeOpacity: 1.0,
         multiply: true,
       };
