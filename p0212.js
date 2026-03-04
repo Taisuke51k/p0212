@@ -19,82 +19,194 @@
   const boot = () => {
     try {
       /* =========================
-         FLAGS
-      ========================= */
-      const SHOW_GUI = false; // lil-gui を読み込んでるなら true にしてもOK
-      const SECTION_TRIGGER_RATIO = 0.5;　// 0〜1（0=画面上端, 0.5=中央, 1=画面下端）
+     FLAGS
+  ========================= */
+
+      // GUI表示フラグ（lil-guiを読み込んでいる場合のみ有効）
+      const SHOW_GUI = false;
+
+      // セクション切替トリガー位置
+      // 0   = 画面上端
+      // 0.5 = 画面中央
+      // 1   = 画面下端
+      const SECTION_TRIGGER_RATIO = 0.5;
 
       /* =========================
-         BASE THEME / STYLE
-      ========================= */
-      const THEME = { bg: "#ffffff" };
+     BASE THEME / STYLE
+  ========================= */
+
+      const THEME = {
+        // 背景色（bodyに適用）
+        bg: "#ffffff",
+      };
+
       const STYLE = {
+        // 線の色
         stroke: "#264226",
-        strokeWidthBase: 2, // 基準（CONFIG.scale のときの線幅）
+
+        // 基準線幅（scale = CONFIG.scale のときの太さ）
+        // scaleMul に比例して変化する
+        strokeWidthBase: 6,
+
+        // 線の透明度（奥行き演出と併用可）
         strokeOpacity: 1.0,
+
+        // true で mix-blend-mode: multiply
+        // 線の重なりが濃くなる
         multiply: true,
       };
 
       /* =========================
-         CORE CONFIG
-      ========================= */
+     CORE CONFIG（もじゃもじゃの物理）
+  ========================= */
+
       const CONFIG = {
+        // 同時に描くストランド（糸）の本数
+        // 増やすと密度UP・重くなる
         strands: 10,
+
+        // 1本あたりの3D点数
+        // 滑らかさに直結・最も重いパラメータ
         pointsPerStrand: 300,
+
+        // 仮想球の半径（内部で糸が動く範囲）
+        // 形状モーフの基準スケール
         radius: 1.0,
+
+        // 1ステップで進む距離
+        // 大きいほど荒く・小さいほど密で滑らか
         step: 0.1,
 
+        /* ====== カメラ / 表示 ====== */
+
+        // 透視投影のカメラ距離
+        // 小さい → パース強い
+        // 大きい → フラット寄り
         cameraDistance: 3.2,
-        scale: 120, // 基準スケール
 
-        ease: 0.10,
+        // 基準表示スケール
+        // セクションごとの scaleMul がこれに掛かる
+        scale: 120,
 
+        // 回転などのイージング係数
+        // 小さいほどヌルヌル遅い
+        // 大きいほど追従速い
+        ease: 0.1,
+
+        /* ====== 2Dスムージング ====== */
+
+        // 2D平滑化パス回数
+        // 0でもOK（軽量）
         smoothPasses: 1,
+
+        // 2D平滑化の強さ
+        // 0.1〜0.2が自然
         smoothStrength: 0.16,
+
+        // Catmull-Rom → Bezier の張り具合
+        // 0.5が自然 / 1に近いほど鋭い
         splineAlpha: 0.5,
+
+        // SVG座標の小数桁
+        // 下げると軽くなる
         precision: 5,
 
-        minTurnDeg: 0.85,
-        turnJitterDeg: 0.35,
-        axisWander: 0.06,
+        /* ====== 3Dランダム回転制御 ====== */
+
+        // 1ステップあたりの最小回転角（度）
+        // 大きいと荒れる
+        minTurnDeg: 1,
+
+        // 回転のランダム幅（度）
+        turnJitterDeg: 0.5,
+
+        // 回転軸の揺らぎ量
+        // 大きいほど暴れる
+        axisWander: 0.1,
+
+        // 回転軸の減衰率（1に近いほど滑らか）
         axisDamping: 0.94,
 
-        centerPull: 0.045,
-        edgeInBias: 0.18,
-        edgePower: 3.0,
+        /* ====== 中心引力制御 ====== */
 
-        softBounce: 0.65,
+        // 中心へ引き戻す力
+        // 大きいと密集
+        centerPull: 0.1,
 
-        viewRadius: 160, // viewBox 半径（表示窓）
+        // 外周に近づいたときの追加引力
+        edgeInBias: 0.2,
+
+        // 外周補正の強さ（指数）
+        // 高いほど外周で急に戻る
+        edgePower: 2.0,
+
+        /* ====== 球外反射 ====== */
+
+        // 球壁に当たったときの反発強度
+        // 1 = 完全反射
+        // 0 = そのまま
+        softBounce: 0.5,
+
+        /* ====== 表示窓 ====== */
+
+        // SVG viewBox 半径
+        // 大きいほど余白増える
+        viewRadius: 160,
       };
 
       /* =========================
-         ROTATION (auto rotate)
-      ========================= */
+     ROTATION（常時回転）
+  ========================= */
+
       const ROT = {
+        // 自動回転ON/OFF
         autoEnabled: true,
-        autoDegPerSecY: 10.0,
+
+        // Y軸回転速度（度/秒）
+        autoDegPerSecY: 5.0,
+
+        // X軸回転速度（度/秒）
         autoDegPerSecX: 2.6,
       };
 
       /* =========================
-         TRANSITION TUNING
-      ========================= */
+     TRANSITION（セクション遷移）
+  ========================= */
+
       const TRANS = {
-        follow: 0.12, // セクション target への追従（0..1 / 大きいほど速い）
-        // philosophy の shape 切替 “境界のなだらか幅”
-        philosophyBlendWidth: 0.06,
+        // セクションtargetへの追従スピード
+        // 0.05〜0.2推奨
+        follow: 0.12,
+
+        // philosophyでの shape 切替ブレンド幅
+        // 小さい → パキッ
+        // 大きい → ヌルッ
+        philosophyBlendWidth: 0.1,
       };
 
       /* =========================
-         SHADOW (ellipse + blur) 追従
-      ========================= */
+     SHADOW（床影）
+  ========================= */
+
       const SHADOW = {
+        // 影を出すかどうか
         enabled: true,
+
+        // 影の濃さ
         opacity: 0.14,
+
+        // ガウスぼかし強度
+        // 大きいと柔らかい・重くなる
         blurStdDev: 10,
-        yOffset: 0.4, // centerY からどれだけ下か（viewBox単位で scale に追従させる）
-        rxRatio: 0.55, // viewRadius に対する比率（さらに scale に追従させる）
+
+        // 中心からどれだけ下に置くか
+        // scale に追従
+        yOffset: 0.4,
+
+        // 影の横幅（viewRadius比）
+        rxRatio: 0.55,
+
+        // 影の縦幅（viewRadius比）
         ryRatio: 0.13,
       };
 
@@ -406,7 +518,11 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
             const rr = Math.hypot(p.x, p.y, p.z);
             if (rr > cfg.radius) {
               const n = { x: p.x / rr, y: p.y / rr, z: p.z / rr };
-              p = { x: n.x * cfg.radius, y: n.y * cfg.radius, z: n.z * cfg.radius };
+              p = {
+                x: n.x * cfg.radius,
+                y: n.y * cfg.radius,
+                z: n.z * cfg.radius,
+              };
 
               const dn = dir.x * n.x + dir.y * n.y + dir.z * n.z;
               const reflected = {
@@ -439,7 +555,11 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
         const nx = v.x / r,
           ny = v.y / r,
           nz = v.z / r;
-        return { x: nx * CONFIG.radius, y: ny * CONFIG.radius, z: nz * CONFIG.radius };
+        return {
+          x: nx * CONFIG.radius,
+          y: ny * CONFIG.radius,
+          z: nz * CONFIG.radius,
+        };
       }
 
       function surfaceCube(v) {
@@ -517,19 +637,28 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
 
         // shadow filter
         if (SHADOW.enabled) {
-          const f = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+          const f = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "filter",
+          );
           f.setAttribute("id", "p0212-shadow-filter");
           f.setAttribute("x", "-50%");
           f.setAttribute("y", "-50%");
           f.setAttribute("width", "200%");
           f.setAttribute("height", "200%");
-          const blur = document.createElementNS("http://www.w3.org/2000/svg", "feGaussianBlur");
+          const blur = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "feGaussianBlur",
+          );
           blur.setAttribute("in", "SourceGraphic");
           blur.setAttribute("stdDeviation", String(SHADOW.blurStdDev));
           f.appendChild(blur);
           defsEl.appendChild(f);
 
-          shadowEl = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+          shadowEl = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "ellipse",
+          );
           shadowEl.setAttribute("class", "p0212-shadow");
           shadowEl.setAttribute("filter", "url(#p0212-shadow-filter)");
           outSvg.appendChild(shadowEl);
@@ -538,7 +667,10 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
         }
 
         // group for paths
-        pathsGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        pathsGroup = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "g",
+        );
         pathsGroup.setAttribute("id", "p0212-paths");
         outSvg.appendChild(pathsGroup);
       }
@@ -548,10 +680,14 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       // paths
       let els = [];
       function ensurePaths() {
-        while (pathsGroup.firstChild) pathsGroup.removeChild(pathsGroup.firstChild);
+        while (pathsGroup.firstChild)
+          pathsGroup.removeChild(pathsGroup.firstChild);
         els = [];
         for (let i = 0; i < CONFIG.strands; i++) {
-          const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          const p = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "path",
+          );
           p.setAttribute("class", "strand");
           pathsGroup.appendChild(p);
           els.push(p);
@@ -571,7 +707,15 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
          SECTION HANDLING
          - ids: fv, philosophy, topics, profile, works, service, contact
       ========================= */
-      const KEYS = ["fv", "philosophy", "topics", "profile", "works", "service", "contact"];
+      const KEYS = [
+        "fv",
+        "philosophy",
+        "topics",
+        "profile",
+        "works",
+        "service",
+        "contact",
+      ];
 
       // 位置は「画面中心を 0」として viewBox 単位で扱う（-viewRadius .. +viewRadius）
       // centerX = -0.6*viewRadius なら左寄り / +0.6*viewRadius なら右寄り
@@ -582,13 +726,69 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       }
 
       const SECTION_PRESETS = {
-        fv:       { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 1.0, centerX: 0.0, centerY: 0.0 },
-        philosophy:{ morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 1.0, centerX: 0.0, centerY: 0.0 }, // 中で上書き
-        topics:   { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 1.0, centerX: 0.0, centerY: 0.0 },
-        profile:  { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 0.2, centerX: xFromLeftRatio(0.2), centerY: 0.0 },
-        works:    { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 4.0, centerX: 0.0, centerY: 0.0 },
-        service:  { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 2.0, centerX: xFromLeftRatio(0.0), centerY: 0.0 },
-        contact:  { morph: 0.0, shapeA: "sphere", shapeB: "sphere", t: 0.0, scaleMul: 0.2, centerX: xFromLeftRatio(0.8), centerY: 0.0 },
+        fv: {
+          morph: 0.0,
+          shapeA: "sphere",
+          shapeB: "sphere",
+          t: 0.0,
+          scaleMul: 1.0,
+          centerX: 0.0,
+          centerY: 0.0,
+        },
+        philosophy: {
+          morph: 0.0,
+          shapeA: "sphere",
+          shapeB: "sphere",
+          t: 0.0,
+          scaleMul: 1.0,
+          centerX: 0.0,
+          centerY: 0.0,
+        }, // 中で上書き
+        topics: {
+          morph: 0.0,
+          shapeA: "sphere",
+          shapeB: "sphere",
+          t: 0.0,
+          scaleMul: 1.0,
+          centerX: 0.0,
+          centerY: 0.0,
+        },
+        profile: {
+          morph: 0.0,
+          shapeA: "sphere",
+          shapeB: "sphere",
+          t: 0.0,
+          scaleMul: 0.2,
+          centerX: xFromLeftRatio(0.2),
+          centerY: 0.0,
+        },
+        works: {
+          morph: 0.0,
+          shapeA: "sphere",
+          shapeB: "sphere",
+          t: 0.0,
+          scaleMul: 4.0,
+          centerX: 0.0,
+          centerY: 0.0,
+        },
+        service: {
+          morph: 0.0,
+          shapeA: "sphere",
+          shapeB: "sphere",
+          t: 0.0,
+          scaleMul: 2.0,
+          centerX: xFromLeftRatio(0.0),
+          centerY: 0.0,
+        },
+        contact: {
+          morph: 0.0,
+          shapeA: "sphere",
+          shapeB: "sphere",
+          t: 0.0,
+          scaleMul: 0.2,
+          centerX: xFromLeftRatio(0.8),
+          centerY: 0.0,
+        },
       };
 
       function getById(id) {
@@ -596,31 +796,31 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       }
 
       function getSectionProgressById(id) {
-         const el = document.getElementById(id);
-         if (!el) return 0;
-         const r = el.getBoundingClientRect();
-         // ★ セクション切替と同じ基準線
-         const triggerY = innerHeight * SECTION_TRIGGER_RATIO;
-         // progress:
-         // 0 = セクション上端が triggerY に来た瞬間
-         // 1 = セクション下端が triggerY に来た瞬間
-         const p = (triggerY - r.top) / Math.max(1, r.height);
-         return clamp(p, 0, 1);
+        const el = document.getElementById(id);
+        if (!el) return 0;
+        const r = el.getBoundingClientRect();
+        // ★ セクション切替と同じ基準線
+        const triggerY = innerHeight * SECTION_TRIGGER_RATIO;
+        // progress:
+        // 0 = セクション上端が triggerY に来た瞬間
+        // 1 = セクション下端が triggerY に来た瞬間
+        const p = (triggerY - r.top) / Math.max(1, r.height);
+        return clamp(p, 0, 1);
       }
 
       function pickActiveSectionKey() {
-         const triggerY = innerHeight * SECTION_TRIGGER_RATIO;
-         let active = "fv";
-         for (const key of KEYS) {
-            const el = getById(key);
-            if (!el) continue;
-            const r = el.getBoundingClientRect();
-            // 「次セクションの上端が triggerY を超えたら」切替
-            if (r.top <= triggerY) {
-               active = key;
-            }
-         }
-         return active;
+        const triggerY = innerHeight * SECTION_TRIGGER_RATIO;
+        let active = "fv";
+        for (const key of KEYS) {
+          const el = getById(key);
+          if (!el) continue;
+          const r = el.getBoundingClientRect();
+          // 「次セクションの上端が triggerY を超えたら」切替
+          if (r.top <= triggerY) {
+            active = key;
+          }
+        }
+        return active;
       }
 
       /* =========================
@@ -664,7 +864,9 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
           const p = getSectionProgressById("philosophy");
 
           // 4 states split
-          const t1 = 0.25, t2 = 0.50, t3 = 0.75;
+          const t1 = 0.25,
+            t2 = 0.5,
+            t3 = 0.75;
           const w = TRANS.philosophyBlendWidth;
 
           // morph spec: ①のみ0 / ②③④は1
@@ -672,23 +874,33 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
 
           // shape spec: ①② sphere / ③ cube / ④ tetra
           // ただし境界(t2, t3)は滑らか補間
-          let a = "sphere", b = "sphere", tt = 0.0;
+          let a = "sphere",
+            b = "sphere",
+            tt = 0.0;
 
           // sphere->cube around t2
           if (p < t2 - w) {
-            a = "sphere"; b = "sphere"; tt = 0.0;
+            a = "sphere";
+            b = "sphere";
+            tt = 0.0;
           } else if (p < t2 + w) {
-            a = "sphere"; b = "cube";
+            a = "sphere";
+            b = "cube";
             tt = smoothstep((p - (t2 - w)) / (2 * w));
           }
           // cube->tetra around t3
           else if (p < t3 - w) {
-            a = "cube"; b = "cube"; tt = 0.0;
+            a = "cube";
+            b = "cube";
+            tt = 0.0;
           } else if (p < t3 + w) {
-            a = "cube"; b = "tetra";
+            a = "cube";
+            b = "tetra";
             tt = smoothstep((p - (t3 - w)) / (2 * w));
           } else {
-            a = "tetra"; b = "tetra"; tt = 0.0;
+            a = "tetra";
+            b = "tetra";
+            tt = 0.0;
           }
 
           LIVE.tgt.shapeBlend = { a, b, t: tt };
@@ -707,12 +919,12 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
          - 表示スケールに比例させる
       ========================= */
       function applyStrokeWidthByScale(scaleMul) {
-         const scale = CONFIG.scale * scaleMul;
-         let w = STYLE.strokeWidthBase * Math.sqrt(scaleMul);
-         const MAX_STROKE = 12;   // ← 好きな上限
-         const MIN_STROKE = 1;  // ← 下限も付けると安定
-         w = Math.min(MAX_STROKE, Math.max(MIN_STROKE, w));
-         outSvg.style.setProperty("--strokeWidth", String(w));
+        const scale = CONFIG.scale * scaleMul;
+        let w = STYLE.strokeWidthBase * Math.sqrt(scaleMul);
+        const MAX_STROKE = 12; // ← 好きな上限
+        const MIN_STROKE = 1; // ← 下限も付けると安定
+        w = Math.min(MAX_STROKE, Math.max(MIN_STROKE, w));
+        outSvg.style.setProperty("--strokeWidth", String(w));
       }
 
       // theme / stroke
@@ -723,8 +935,10 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
       /* =========================
          RENDER LOOP
       ========================= */
-      let curRx = 0, curRy = 0;
-      let autoRx = 0, autoRy = 0;
+      let curRx = 0,
+        curRy = 0;
+      let autoRx = 0,
+        autoRy = 0;
       let lastNow = performance.now();
 
       function updateShadow(scaleMul, cx, cy) {
@@ -863,7 +1077,10 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
     }
   };
 
-  if (document.readyState === "complete" || document.readyState === "interactive") {
+  if (
+    document.readyState === "complete" ||
+    document.readyState === "interactive"
+  ) {
     boot();
   } else {
     document.addEventListener("DOMContentLoaded", boot, { once: true });
