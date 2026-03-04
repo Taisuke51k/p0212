@@ -704,9 +704,12 @@ body{ background:var(--p0212-bg); overflow-x:hidden; }
          - 表示スケールに比例させる
       ========================= */
       function applyStrokeWidthByScale(scaleMul) {
-        const scale = CONFIG.scale * scaleMul;
-        const w = STYLE.strokeWidthBase * (scale / CONFIG.scale);
-        outSvg.style.setProperty("--strokeWidth", String(w));
+         const scale = CONFIG.scale * scaleMul;
+         let w = STYLE.strokeWidthBase * Math.sqrt(scaleMul);
+         const MAX_STROKE = 12;   // ← 好きな上限
+         const MIN_STROKE = 1;  // ← 下限も付けると安定
+         w = Math.min(MAX_STROKE, Math.max(MIN_STROKE, w));
+         outSvg.style.setProperty("--strokeWidth", String(w));
       }
 
       // theme / stroke
