@@ -30,7 +30,7 @@
       const THEME = { bg: "#ffffff" };
       const STYLE = {
         stroke: "#264226",
-        strokeWidthBase: 6, // 基準（CONFIG.scale のときの線幅）
+        strokeWidthBase: 4, // 基準（CONFIG.scale のときの線幅）
         strokeOpacity: 1.0,
         multiply: true,
       };
@@ -39,10 +39,10 @@
          CORE CONFIG
       ========================= */
       const CONFIG = {
-        strands: 12,
-        pointsPerStrand: 360,
+        strands: 10,
+        pointsPerStrand: 300,
         radius: 1.0,
-        step: 0.07,
+        step: 0.1,
 
         cameraDistance: 3.2,
         scale: 120, // 基準スケール
@@ -93,7 +93,7 @@
         enabled: true,
         opacity: 0.14,
         blurStdDev: 10,
-        yOffset: 0.62, // centerY からどれだけ下か（viewBox単位で scale に追従させる）
+        yOffset: 0.4, // centerY からどれだけ下か（viewBox単位で scale に追従させる）
         rxRatio: 0.55, // viewRadius に対する比率（さらに scale に追従させる）
         ryRatio: 0.13,
       };
